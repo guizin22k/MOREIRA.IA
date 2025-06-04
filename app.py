@@ -2,7 +2,13 @@ import streamlit as st
 import openai
 import requests
 from bs4 import BeautifulSoup
+import newspaper
+from readability import Document
+import nltk
 import time
+
+# Baixar recursos do nltk para tokenização
+nltk.download('punkt')
 
 # ================= CONFIG =================
 st.set_page_config(page_title="MOREIRAGPT", page_icon="🤖", layout="wide")
@@ -15,9 +21,11 @@ st.markdown("""
     <hr>
 """, unsafe_allow_html=True)
 
-# Inicializa sessão para histórico de conversa
+# Inicializa sessão para histórico de conversa e lembretes
 if "historico" not in st.session_state:
     st.session_state["historico"] = []
+if "lembretes" not in st.session_state:
+    st.session_state["lembretes"] = []
 
 # =============== FUNÇÕES ================
 
@@ -46,6 +54,39 @@ def buscar_na_web(pergunta, max_results=3):
     except Exception as e:
         return [f"Erro ao buscar na web: {str(e)}"]
 
+def extrair_texto_url(url):
+    """
+    Extrai o texto principal da página, usando newspaper3k ou readability.
+    """
+    try:
+        article = newspaper.Article(url)
+        article.download()
+        article.parse()
+        text = article.text
+        if len(text) < 200:
+            # fallback para readability
+            r = requests.get(url, timeout=5)
+            doc = Document(r.text)
+            text = doc.summary()
+        return text
+    except:
+        try:
+            r = requests.get(url, timeout=5)
+            doc = Document(r.text)
+            return doc.summary()
+        except:
+            return ""
+
+def resumir_texto(texto, max_sentencas=5):
+    """
+    Faz uma sumarização simples pegando as primeiras sentenças do texto.
+    """
+    sentencas = nltk.tokenize.sent_tokenize(texto)
+    resumo = " ".join(sentencas[:max_sentencas])
+    if len(resumo) == 0:
+        return "Não foi possível resumir o conteúdo."
+    return resumo
+
 def gerar_mensagem_sistema():
     return (
         "Você é a MOREIRAGPT, uma assistente inteligente e humana. "
@@ -58,6 +99,7 @@ def gerar_mensagem_sistema():
         " - /vendas: dicas e técnicas de vendas\n"
         " - /hábitos: sugestões para disciplina e rotina\n"
         " - /web [termo]: pesquisa na web e resumo dos melhores resultados\n"
+        " - /lembrete [texto]: cria um lembrete simples para aparecer na tela\n"
         "Responda sempre de forma objetiva e útil."
     )
 
@@ -68,10 +110,28 @@ def interpretar_comando(prompt):
         if termo == "":
             return "Por favor, informe o termo para busca após /web."
         resultados = buscar_na_web(termo)
-        return "\n\n".join(resultados)
+        textos_resumo = []
+        for res in resultados:
+            # extrair link da string (ultimo link depois do 🔗 )
+            partes = res.split("🔗 ")
+            if len(partes) == 2:
+                texto, url = partes
+                texto_limpo = BeautifulSoup(texto, "html.parser").get_text()
+                conteudo = extrair_texto_url(url.strip())
+                resumo = resumir_texto(conteudo, max_sentencas=5)
+                textos_resumo.append(f"{texto_limpo}\nResumo:\n{resumo}\n🔗 {url.strip()}")
+            else:
+                textos_resumo.append(res)
+        return "\n\n".join(textos_resumo)
+
+    elif prompt.startswith("/lembrete"):
+        lembrete_texto = prompt[8:].strip()
+        if lembrete_texto == "":
+            return "Por favor, informe o texto do lembrete após /lembrete."
+        st.session_state["lembretes"].append(lembrete_texto)
+        return f"Lembrete criado: {lembrete_texto}"
 
     elif prompt.startswith("/marketing"):
-        # Aqui pode ter resposta padrão, mas vamos mandar para o GPT
         return None
 
     elif prompt.startswith("/vendas"):
@@ -80,7 +140,6 @@ def interpretar_comando(prompt):
     elif prompt.startswith("/hábitos"):
         return None
 
-    # Sem comando especial
     return None
 
 def enviar_mensagem_openai(mensagens):
@@ -104,11 +163,9 @@ if entrada:
     resposta_comando = interpretar_comando(entrada)
 
     if resposta_comando is not None:
-        # Resposta de comando especial (ex: /web)
         st.info(resposta_comando)
         st.session_state["historico"].append({"user": entrada, "bot": resposta_comando})
     else:
-        # Constrói histórico para contexto do chat com o sistema e as mensagens anteriores
         mensagens = [{"role": "system", "content": gerar_mensagem_sistema()}]
         for troca in st.session_state["historico"][-5:]:
             mensagens.append({"role": "user", "content": troca["user"]})
@@ -120,8 +177,6 @@ if entrada:
 
         st.success("Resposta da MOREIRAGPT:")
         st.markdown(resposta_ia)
-
-        # Salva histórico
         st.session_state["historico"].append({"user": entrada, "bot": resposta_ia})
 
 # ============== EXIBIR HISTÓRICO ================
@@ -133,6 +188,13 @@ if st.session_state["historico"]:
         st.markdown(f"**Você:** {troca['user']}")
         st.markdown(f"🤖 **MOREIRAGPT:** {troca['bot']}")
         st.markdown("---")
+
+# ============== EXIBIR LEMBRETES ================
+if st.session_state["lembretes"]:
+    st.markdown("---")
+    st.markdown("### Lembretes")
+    for idx, lembrete in enumerate(st.session_state["lembretes"], 1):
+        st.markdown(f"- {idx}. {lembrete}")
 
 # ============== RODAPÉ =================
 st.markdown("""
