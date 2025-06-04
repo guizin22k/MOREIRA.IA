@@ -1,80 +1,67 @@
 import streamlit as st
+from duckduckgo_search import DDGS
 from openai import OpenAI
-import requests
+import os
 
-client = OpenAI(api_key=st.secrets["openai_api_key"])
+st.set_page_config(page_title="MOREIRAGPT", page_icon="🤖", layout="wide")
 
-def busca_duckduckgo(query):
-    url = "https://api.duckduckgo.com/"
-    params = {
-        "q": query,
-        "format": "json",
-        "no_redirect": 1,
-        "no_html": 1,
-        "skip_disambig": 1,
-    }
-    resp = requests.get(url, params=params)
-    if resp.status_code == 200:
-        data = resp.json()
-        abstract = data.get("AbstractText", "")
-        related = data.get("RelatedTopics", [])
-        snippets = [abstract] if abstract else []
-        for topic in related:
-            if isinstance(topic, dict) and "Text" in topic:
-                snippets.append(topic["Text"])
-        return "\n".join(snippets[:5]) if snippets else "Não encontrei resultados relevantes na web."
-    else:
-        return "Erro ao buscar na web."
-
-def gera_resposta(pergunta):
-    conteudo_web = busca_duckduckgo(pergunta)
-    prompt = f"""
-Você: Responda à pergunta abaixo usando SOMENTE o conteúdo obtido da web.
-
-Conteúdo da web:
-{conteudo_web}
-
-Resposta precisa e clara:
-"""
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=300,
-        temperature=0.3,
-    )
-    return response.choices[0].message.content.strip()
-
-# Interface azul customizada no Streamlit
-
-st.markdown(
-    """
+st.markdown("""
     <style>
-    .css-18e3th9 {
-        background-color: #001F7A;
-        color: white;
-        padding: 1rem;
-        border-radius: 0.5rem;
+    body {
+        background-color: #e6f0ff;
     }
-    .stTextInput>div>div>input {
-        background-color: #e0e7ff;
-        color: #001F7A;
-        border-radius: 0.25rem;
-        padding: 0.5rem;
+    .stApp {
+        background-color: #e6f0ff;
     }
-    .css-1v0mbdj {
-        color: #001F7A;
+    .title {
+        font-size: 48px;
+        color: #004aad;
+        text-align: center;
+        margin-bottom: 20px;
     }
     </style>
-    """,
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-st.title("🤖 MOREIRAGPT")
+st.markdown('<div class="title">MOREIRAGPT</div>', unsafe_allow_html=True)
 
-pergunta = st.text_input("Faça uma pergunta para MOREIRAGPT:")
+with st.sidebar:
+    st.title("Configurações")
+    openai_api_key = st.text_input("Chave da API OpenAI", type="password")
+    if not openai_api_key:
+        st.warning("Insira sua chave da OpenAI para continuar.")
+        st.stop()
+
+client = OpenAI(api_key=openai_api_key)
+
+def buscar_na_web(query):
+    with DDGS() as ddgs:
+        resultados = ddgs.text(query, max_results=3)
+        texto_resultado = "\n\n".join([r["body"] for r in resultados if "body" in r])
+        return texto_resultado or "Nenhum resultado encontrado na web."
+
+def responder_ia(pergunta, contexto_web):
+    prompt = f"""
+Você é o MOREIRAGPT, uma IA com acesso à internet.
+
+Usuário perguntou: "{pergunta}"
+
+Responda com base nas informações abaixo da web:
+
+{contexto_web}
+
+Responda de forma clara e direta:
+"""
+    resposta = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return resposta.choices[0].message.content
+
+pergunta = st.text_input("Você:", placeholder="Pergunte algo para o MOREIRAGPT")
 
 if pergunta:
-    with st.spinner("Pesquisando e gerando resposta..."):
-        resposta = gera_resposta(pergunta)
-        st.markdown(f"**Você:** {pergunta}")
-        st.markdown(f"**MOREIRAGPT:** {resposta}")
+    with st.spinner("Buscando na web e gerando resposta..."):
+        contexto = buscar_na_web(pergunta)
+        resposta = responder_ia(pergunta, contexto)
+        st.markdown("### MOREIRAGPT:")
+        st.write(resposta)
