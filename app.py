@@ -1,8 +1,9 @@
 import streamlit as st
 from PIL import Image
 import io
-import replicate
 import os
+import base64
+import replicate
 
 st.set_page_config(page_title="MOREIRA.IA - Gerador de Imagens", layout="centered")
 
@@ -11,56 +12,51 @@ st.markdown("""
     <p style='text-align: center; color: #007FFF;'>Envie uma imagem, descreva o que quer modificar e gere uma nova imagem com IA</p>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-    <style>
-    div.stUpload {
-        text-align: center;
-        font-size: 72px;
-        font-weight: bold;
-        color: #007FFF;
-        cursor: pointer;
-        border: 3px dashed #007FFF;
-        border-radius: 12px;
-        padding: 40px;
-        margin: 20px auto;
-        max-width: 320px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+uploaded_file = st.file_uploader("➕ Envie sua imagem (jpg, png)", type=["jpg", "jpeg", "png"], label_visibility="visible")
 
-uploaded_file = st.file_uploader("➕", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
+default_prompt = ("Transforme esta imagem mantendo sua composição principal, mas adicione iluminação dramática "
+                  "e realismo fotográfico, com cores vibrantes e um fundo artístico abstrato. "
+                  "Faça a imagem parecer uma obra-prima digital hiper-realista, preservando detalhes nítidos "
+                  "e uma atmosfera envolvente.")
 
-prompt = st.text_input("✍️ O que deseja modificar ou adicionar na imagem?")
+prompt = st.text_area("Descreva a modificação desejada para a imagem:", height=100)
 
-if uploaded_file and prompt:
+if st.button("Inserir prompt padrão"):
+    prompt = default_prompt
+    st.experimental_rerun()  # Para atualizar a caixa de texto com o prompt padrão
+
+if uploaded_file and prompt.strip():
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Imagem original enviada", use_column_width=True)
 
     with st.spinner("🧠 Gerando nova imagem com IA..."):
         REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
         if not REPLICATE_API_TOKEN:
-            st.error("❗️ Chave da API Replicate não encontrada. Adicione ela no Secrets do Streamlit ou na variável de ambiente.")
+            st.error("❗️ Chave da API Replicate não encontrada no Secrets ou variável de ambiente.")
         else:
             client = replicate.Client(api_token=REPLICATE_API_TOKEN)
 
-            img_bytes = io.BytesIO()
-            image.save(img_bytes, format="PNG")
-            img_bytes.seek(0)
+            buffered = io.BytesIO()
+            image.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            img_base64 = f"data:image/png;base64,{img_str}"
 
-            output_urls = client.run(
-                "stability-ai/stable-diffusion-img2img",
-                input={
-                    "image": img_bytes,
-                    "prompt": prompt,
-                    "strength": 0.6,
-                    "num_inference_steps": 50,
-                    "guidance_scale": 7.5
-                }
-            )
+            try:
+                output_urls = client.run(
+                    "stability-ai/stable-diffusion-img2img",
+                    input={
+                        "image": img_base64,
+                        "prompt": prompt,
+                        "strength": 0.6,
+                        "num_inference_steps": 50,
+                        "guidance_scale": 7.5
+                    }
+                )
+                st.image(output_urls, caption="🖼️ Imagem gerada pela IA", use_column_width=True)
+            except Exception as e:
+                st.error(f"Erro ao gerar imagem: {e}")
 
-            st.image(output_urls, caption="🖼️ Imagem gerada pela IA", use_column_width=True)
-
+elif uploaded_file and not prompt.strip():
+    st.info("Por favor, digite o que deseja modificar na imagem.")
 elif not uploaded_file:
-    st.info("Envie uma imagem usando o botão + acima para começar.")
-elif not prompt:
-    st.info("Digite o que deseja modificar ou adicionar na imagem.")
+    st.info("Envie uma imagem usando o botão acima para começar.")
