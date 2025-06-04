@@ -4,100 +4,23 @@ import requests
 from bs4 import BeautifulSoup
 import time
 
-# ============ CONFIG ===============
-st.set_page_config(page_title="🤖 MOREIRAGPT 2.0 - Máquina de Dinheiro", page_icon="🚀", layout="wide")
+# ================= CONFIGURAÇÕES =================
+st.set_page_config(
+    page_title="MOREIRAGPT 2.0 🤖",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Carregando API KEY OpenAI (garanta que está no st.secrets)
+# Inicializa cliente OpenAI com sua chave do secrets
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# ============ CSS PERSONALIZADO =============
-def local_css():
-    st.markdown("""
-    <style>
-        /* Fundo degradê futurista */
-        body, .block-container {
-            background: linear-gradient(135deg, #020024 0%, #090979 35%, #00d4ff 100%);
-            color: #E0F7FA;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        h1, h2, h3 {
-            font-weight: 900;
-            text-shadow: 1px 1px 8px #00e5ff;
-        }
-        .stTextInput>div>div>input {
-            border-radius: 12px !important;
-            padding: 12px 18px !important;
-            border: 2px solid #00e5ff !important;
-            background: #02122c !important;
-            color: #00ffff !important;
-        }
-        .stButton>button {
-            background: linear-gradient(90deg, #00e5ff 0%, #006aff 100%) !important;
-            color: #001f3f !important;
-            font-weight: 700 !important;
-            border-radius: 14px !important;
-            padding: 12px 28px !important;
-            transition: background-color 0.3s ease;
-        }
-        .stButton>button:hover {
-            background: #00bcd4 !important;
-            color: white !important;
-            cursor: pointer;
-        }
-        .chat-message {
-            border-radius: 15px;
-            padding: 16px 24px;
-            margin-bottom: 18px;
-            box-shadow: 0 0 12px rgba(0, 229, 255, 0.4);
-            background: rgba(2, 40, 70, 0.8);
-        }
-        .user-msg {
-            color: #00ffff;
-            font-weight: 700;
-            text-align: right;
-        }
-        .bot-msg {
-            color: #00e5ff;
-            font-weight: 600;
-            text-align: left;
-            white-space: pre-wrap;
-        }
-        footer {
-            font-size: 0.8rem;
-            color: #00838f;
-            text-align: center;
-            margin-top: 2rem;
-            padding: 10px 0;
-        }
-        /* Scroll suave histórico */
-        #historico {
-            max-height: 380px;
-            overflow-y: auto;
-            padding-right: 8px;
-        }
-    </style>
-    """, unsafe_allow_html=True)
+# ================= BIBLIOTECA ===================
 
-local_css()
-
-# ============ UI =============
-st.markdown("""
-    <h1 style='text-align: center;'>🤖 MOREIRAGPT 2.0</h1>
-    <h3 style='text-align: center; font-weight: 500; color: #00e5ff;'>Sua IA parceira para crescer, faturar e dominar em 2025</h3>
-    <hr style='border: 1px solid #00e5ff; margin-bottom: 1.5rem;'>
-""", unsafe_allow_html=True)
-
-# Histórico de conversa
-if "historico" not in st.session_state:
-    st.session_state["historico"] = []
-
-# ============ FUNÇÕES AVANÇADAS ============
-
-def buscar_na_web(pergunta, max_results=4):
-    """Pesquisa no DuckDuckGo com scrape avançado, retorna snippets ricos"""
+def buscar_na_web(pergunta, max_results=5):
     try:
         url = f"https://duckduckgo.com/html/?q={pergunta.replace(' ', '+')}"
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; MoreiraBot/1.0)"}
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; MoreiraBot/2.0)"}
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
@@ -140,11 +63,10 @@ def interpretar_comando(prompt):
             return "Por favor, informe o termo para busca após /web."
         resultados = buscar_na_web(termo, max_results=5)
         return "\n\n".join(resultados)
-
-    # Os outros comandos deixam rolar para o GPT
+    # Outros comandos ficam para GPT processar
     return None
 
-def enviar_mensagem_openai(mensagens):
+def enviar_mensagem_openai(mensagens, client):
     try:
         resposta = client.chat.completions.create(
             model="gpt-4",
@@ -160,45 +82,133 @@ def enviar_mensagem_openai(mensagens):
     except Exception as e:
         return f"Erro ao obter resposta da IA: {str(e)}"
 
-# ============ INTERAÇÃO ==============
+# ================== INTERFACE =====================
 
-entrada = st.text_input("Digite sua pergunta ou comando:", placeholder="Ex: /marketing Como faturar com TikTok em 2025?")
+# Fundo estilizado com CSS
+st.markdown(
+    """
+    <style>
+    .main {
+        background: linear-gradient(135deg, #1f1c2c, #928dab);
+        color: white;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .title {
+        font-size: 3.5rem;
+        font-weight: 900;
+        text-align: center;
+        margin-top: 1rem;
+        letter-spacing: 0.15rem;
+        background: -webkit-linear-gradient(#2C6EFA, #00FFD1);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+        text-align: center;
+        font-size: 1.3rem;
+        margin-bottom: 2rem;
+        color: #A1A1A1;
+    }
+    .chat-box {
+        background-color: #2a2a3d;
+        border-radius: 15px;
+        padding: 20px;
+        max-height: 550px;
+        overflow-y: auto;
+        box-shadow: 0 0 12px #00ffd1;
+        font-size: 1.1rem;
+    }
+    .user-msg {
+        color: #00FFD1;
+        font-weight: 700;
+    }
+    .bot-msg {
+        color: #FFFFFF;
+        margin-bottom: 1rem;
+    }
+    .footer {
+        text-align: center;
+        font-size: 0.85rem;
+        margin-top: 3rem;
+        color: #666;
+    }
+    input[type="text"] {
+        border-radius: 12px;
+        border: 2px solid #00FFD1;
+        padding: 12px 15px;
+        font-size: 1.1rem;
+        width: 100%;
+        background-color: #1f1c2c;
+        color: white;
+        outline: none;
+        transition: border-color 0.3s ease;
+    }
+    input[type="text"]:focus {
+        border-color: #2C6EFA;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown("<div class='title'>🤖 MOREIRAGPT 2.0</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Sua IA parceira para crescimento, disciplina e renda online</div>", unsafe_allow_html=True)
+st.markdown("---")
+
+# Histórico da conversa na sessão
+if "historico" not in st.session_state:
+    st.session_state["historico"] = []
+
+# Caixa de input lateral para instruções rápidas
+with st.sidebar:
+    st.header("⚙️ Comandos Rápidos")
+    st.markdown("""
+    - **/marketing** — estratégias de marketing digital e vendas  
+    - **/vendas** — dicas e técnicas de vendas  
+    - **/hábitos** — disciplina, rotina e hábitos  
+    - **/web [termo]** — pesquisa rápida na web  
+    ---
+    Dica: Sempre use comandos para respostas especializadas.
+    """)
+
+entrada = st.text_input("Digite sua pergunta ou comando:", placeholder="Ex: /marketing Como crescer no TikTok em 2025?")
 
 if entrada:
     resposta_comando = interpretar_comando(entrada)
 
     if resposta_comando is not None:
-        # Comando /web ou erro simples
+        # Exibe resposta do comando especial (/web)
         st.info(resposta_comando)
         st.session_state["historico"].append({"user": entrada, "bot": resposta_comando})
     else:
-        # Monta o contexto do chat, usa histórico até 5 trocas para contexto
+        # Monta histórico para contexto (últimas 5 trocas)
         mensagens = [{"role": "system", "content": gerar_mensagem_sistema()}]
         for troca in st.session_state["historico"][-5:]:
             mensagens.append({"role": "user", "content": troca["user"]})
             mensagens.append({"role": "assistant", "content": troca["bot"]})
         mensagens.append({"role": "user", "content": entrada})
 
-        with st.spinner("Pensando como Moreira 2.0... 🚀"):
-            resposta_ia = enviar_mensagem_openai(mensagens)
+        with st.spinner("Pensando como Moreira..."):
+            resposta_ia = enviar_mensagem_openai(mensagens, client)
 
-        st.success("Resposta da MOREIRAGPT 2.0:")
-        st.markdown(f"<div class='bot-msg'>{resposta_ia}</div>", unsafe_allow_html=True)
+        st.success("Resposta da MOREIRAGPT:")
+        st.markdown(resposta_ia)
+
         st.session_state["historico"].append({"user": entrada, "bot": resposta_ia})
 
-# ============ EXIBIR HISTÓRICO ==============
-
+# Exibe histórico de conversa com estilo
 if st.session_state["historico"]:
     st.markdown("---")
-    st.markdown("<h3 style='color:#00e5ff'>Histórico da conversa (role para ver mais)</h3>", unsafe_allow_html=True)
-    with st.container():
-        for troca in reversed(st.session_state["historico"][-15:]):
-            st.markdown(f"<div class='chat-message user-msg'>Você: {troca['user']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='chat-message bot-msg'>{troca['bot']}</div>", unsafe_allow_html=True)
+    st.markdown("### Histórico da conversa")
+    for troca in reversed(st.session_state["historico"][-10:]):
+        st.markdown(f"<p class='user-msg'>Você: {troca['user']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p class='bot-msg'>🤖 MOREIRAGPT: {troca['bot']}</p>", unsafe_allow_html=True)
+        st.markdown("---")
 
-# ============ RODAPÉ ==============
-st.markdown("""
-<footer>
-    Desenvolvido por MOREIRA | Para resultados reais em 2025 🚀
-</footer>
-""", unsafe_allow_html=True)
+# Rodapé
+st.markdown(
+    """
+    <div class='footer'>Powered by OpenAI • Feito com ❤️ por Moreira</div>
+    """,
+    unsafe_allow_html=True
+)
