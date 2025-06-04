@@ -1,5 +1,7 @@
-openai>=1.0.0
 streamlit
+openai
 requests
 beautifulsoup4
-
+newspaper3k
+readability-lxml
+nltk
