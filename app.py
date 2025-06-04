@@ -3,65 +3,49 @@ from duckduckgo_search import DDGS
 from openai import OpenAI
 import os
 
-st.set_page_config(page_title="MOREIRAGPT", page_icon="🤖", layout="wide")
+# Título da página
+st.set_page_config(page_title="MOREIRAGPT", page_icon="🤖", layout="centered")
+st.markdown("<h1 style='color:#1f77b4;text-align:center;'>MOREIRAGPT 💬</h1>", unsafe_allow_html=True)
+st.markdown("### Sua assistente com respostas diretas da web!")
 
-st.markdown("""
-    <style>
-    body {
-        background-color: #e6f0ff;
-    }
-    .stApp {
-        background-color: #e6f0ff;
-    }
-    .title {
-        font-size: 48px;
-        color: #004aad;
-        text-align: center;
-        margin-bottom: 20px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Chave da API OpenAI
+client = OpenAI(api_key=st.secrets["openai_api_key"])
 
-st.markdown('<div class="title">MOREIRAGPT</div>', unsafe_allow_html=True)
-
-with st.sidebar:
-    st.title("Configurações")
-    openai_api_key = st.text_input("Chave da API OpenAI", type="password")
-    if not openai_api_key:
-        st.warning("Insira sua chave da OpenAI para continuar.")
-        st.stop()
-
-client = OpenAI(api_key=openai_api_key)
-
-def buscar_na_web(query):
+# Função de busca na web
+def buscar_web_duckduckgo(pergunta):
     with DDGS() as ddgs:
-        resultados = ddgs.text(query, max_results=3)
-        texto_resultado = "\n\n".join([r["body"] for r in resultados if "body" in r])
-        return texto_resultado or "Nenhum resultado encontrado na web."
+        resultados = ddgs.text(pergunta, max_results=5)
+        respostas = [r["body"] for r in resultados if "body" in r]
+        return respostas
 
-def responder_ia(pergunta, contexto_web):
-    prompt = f"""
-Você é o MOREIRAGPT, uma IA com acesso à internet.
+# Função que gera uma resposta clara com base na web
+def gerar_resposta(pergunta):
+    resultados = buscar_web_duckduckgo(pergunta)
+    
+    if not resultados:
+        return "❌ Não encontrei nada relevante na web."
 
-Usuário perguntou: "{pergunta}"
+    contexto = "\n\n".join(resultados[:3])
+    prompt = f"""Responda com clareza e estilo humano à pergunta abaixo, usando SOMENTE o conteúdo da web.
+    
+Pergunta: {pergunta}
+Conteúdo da web:
+{contexto}
 
-Responda com base nas informações abaixo da web:
+Resposta:"""
 
-{contexto_web}
-
-Responda de forma clara e direta:
-"""
     resposta = client.chat.completions.create(
         model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
     )
-    return resposta.choices[0].message.content
 
-pergunta = st.text_input("Você:", placeholder="Pergunte algo para o MOREIRAGPT")
+    return resposta.choices[0].message.content.strip()
+
+# Interface do usuário
+pergunta = st.text_input("Você:", placeholder="Digite aqui sua pergunta...")
 
 if pergunta:
-    with st.spinner("Buscando na web e gerando resposta..."):
-        contexto = buscar_na_web(pergunta)
-        resposta = responder_ia(pergunta, contexto)
-        st.markdown("### MOREIRAGPT:")
-        st.write(resposta)
+    with st.spinner("Consultando a web..."):
+        resposta = gerar_resposta(pergunta)
+    st.markdown(f"**MOREIRAGPT:** {resposta}")
