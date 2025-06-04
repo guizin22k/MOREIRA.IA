@@ -44,5 +44,4 @@ if uploaded_file and prompt:
         image.save(img_bytes, format="PNG")
         img_bytes.seek(0)
 
-        output_urls = client.run(
-            "stabi
+        output_u_
