@@ -37,11 +37,9 @@ def gerar_imagem(img: Image.Image, prompt: str):
     img_bytes = buffered.getvalue()
     img_base64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
 
-    model_version = "stability-ai/stable-diffusion-img2img@f0c8d5ed88de7ef59b0c19c6e8b7c34f9a7d7e97f8860590235ae9a3773c69b7"
-
     try:
         output_urls = client.run(
-            model_version,
+            "stability-ai/stable-diffusion-img2img@15a3689e",
             input={
                 "image": img_base64,
                 "prompt": prompt if prompt.strip() else default_prompt,
@@ -58,25 +56,25 @@ def gerar_imagem(img: Image.Image, prompt: str):
 if st.button("Enviar"):
     if uploaded_file and user_text.strip():
         image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Imagem original", use_column_width=True)
+        st.image(image, caption="Imagem original", use_container_width=True)
         st.write(f"Prompt enviado: {user_text}")
 
         result = gerar_imagem(image, user_text)
         if result:
-            st.image(result, caption="Imagem gerada pela IA", use_column_width=True)
+            st.image(result, caption="Imagem gerada pela IA", use_container_width=True)
 
     elif uploaded_file and not user_text.strip():
         image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Imagem original", use_column_width=True)
+        st.image(image, caption="Imagem original", use_container_width=True)
         st.write("Usando prompt padrão para modificar a imagem.")
         result = gerar_imagem(image, default_prompt)
         if result:
-            st.image(result, caption="Imagem gerada pela IA", use_column_width=True)
+            st.image(result, caption="Imagem gerada pela IA", use_container_width=True)
 
     elif not uploaded_file and user_text.strip():
         st.write("Você enviou apenas texto:")
         st.write(user_text)
-        st.write("Aqui você pode integrar GPT para respostas mais completas.")
+        st.write("💡 Aqui você pode integrar GPT futuramente para respostas em texto.")
 
     else:
-        st.info("Por favor, envie uma mensagem, uma imagem, ou ambos para interagir com a IA.")
+        st.info("📸 Por favor, envie uma mensagem, uma imagem, ou ambos para interagir com a IA.")
