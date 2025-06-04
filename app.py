@@ -38,10 +38,29 @@ if uploaded_file and prompt:
 
     with st.spinner("🧠 Gerando nova imagem com IA..."):
         REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
-        client = replicate.Client(api_token=REPLICATE_API_TOKEN)
+        if not REPLICATE_API_TOKEN:
+            st.error("❗️ Chave da API Replicate não encontrada. Adicione ela no Secrets do Streamlit ou na variável de ambiente.")
+        else:
+            client = replicate.Client(api_token=REPLICATE_API_TOKEN)
 
-        img_bytes = io.BytesIO()
-        image.save(img_bytes, format="PNG")
-        img_bytes.seek(0)
+            img_bytes = io.BytesIO()
+            image.save(img_bytes, format="PNG")
+            img_bytes.seek(0)
 
-        output_u_
+            output_urls = client.run(
+                "stability-ai/stable-diffusion-img2img",
+                input={
+                    "image": img_bytes,
+                    "prompt": prompt,
+                    "strength": 0.6,
+                    "num_inference_steps": 50,
+                    "guidance_scale": 7.5
+                }
+            )
+
+            st.image(output_urls, caption="🖼️ Imagem gerada pela IA", use_column_width=True)
+
+elif not uploaded_file:
+    st.info("Envie uma imagem usando o botão + acima para começar.")
+elif not prompt:
+    st.info("Digite o que deseja modificar ou adicionar na imagem.")
