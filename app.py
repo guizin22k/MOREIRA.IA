@@ -1,81 +1,108 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import openai
+from openai import OpenAI
 
-# Configurações da interface
+# Setup da API OpenAI - pega da secrets do Streamlit
+client = OpenAI(api_key=st.secrets["openai_api_key"])
+
 st.set_page_config(page_title="MOREIRAGPT", page_icon="🤖", layout="centered")
 
-# Estilo simples azul
+# CSS customizado para cor azul e interface igual a minha
 st.markdown(
     """
     <style>
-    body { background-color: #007BFF; color: white; }
-    .stApp { background-color: #007BFF; }
-    .css-1v3fvcr { color: white; }
-    .css-2trqyj { color: white; }
+    /* Fundo azul escuro */
+    .css-18e3th9 {
+        background-color: #0d47a1;  /* azul escuro */
+    }
+    /* Container branco para chat */
+    .css-1d391kg {
+        background-color: white !important;
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    /* Título */
+    .css-1v3fvcr h1 {
+        color: white;
+        font-weight: 700;
+    }
+    /* Botão */
+    button {
+        background-color: #1976d2 !important;
+        color: white !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+    }
+    /* Caixa de texto */
+    textarea, input {
+        border-radius: 6px !important;
+        border: 1px solid #1976d2 !important;
+        padding: 8px !important;
+    }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-st.title("MOREIRAGPT")
-
-# Sua chave da OpenAI no secrets.toml
-openai.api_key = st.secrets["openai_api_key"]
+st.title("🤖 MOREIRAGPT")
 
 def busca_google(query):
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/114.0.0.0 Safari/537.36",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+        "Referer": "https://www.google.com/"
     }
-    params = {
-        "q": query,
-        "hl": "pt"
-    }
+    params = {"q": query, "hl": "pt"}
     url = "https://www.google.com/search"
     res = requests.get(url, headers=headers, params=params)
     soup = BeautifulSoup(res.text, "html.parser")
 
     snippets = []
     for g in soup.find_all('div', class_='tF2Cxc')[:5]:
-        snippet = g.find('div', class_='IsZvec')
-        if snippet:
-            text = snippet.get_text(separator=' ', strip=True)
+        snippet_div = g.find('div', class_='VwiC3b')
+        if snippet_div:
+            text = snippet_div.get_text(separator=' ', strip=True)
             snippets.append(text)
-    return "\n".join(snippets)
+    return "\n".join(snippets) if snippets else "Não encontrei resultados relevantes na web."
 
-def gerar_resposta(pergunta, contexto):
-    prompt = (
-        f"Você é MOREIRAGPT, um assistente que responde apenas com base no texto abaixo, "
-        f"sem inventar nada:\n\n"
-        f"Contexto:\n{contexto}\n\n"
-        f"Pergunta: {pergunta}\n"
-        f"Resposta clara e objetiva:"
+def gera_resposta(pergunta):
+    conteudo_web = busca_google(pergunta)
+    prompt = f"""
+Você: Responda à pergunta abaixo usando SOMENTE o conteúdo obtido da web.
+
+Conteúdo da web:
+{conteudo_web}
+
+Resposta precisa e clara:
+"""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=300,
+        temperature=0.3,
     )
-    try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=prompt,
-            max_tokens=300,
-            temperature=0.3,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0
-        )
-        return response.choices[0].text.strip()
-    except Exception as e:
-        return f"Erro ao gerar resposta: {e}"
+    return response.choices[0].message.content.strip()
 
-query = st.text_input("Faça sua pergunta para MOREIRAGPT:")
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-if query:
-    with st.spinner("Buscando na web e gerando resposta..."):
-        contexto = busca_google(query)
-        if not contexto:
-            st.write("Não encontrei resultados relevantes na web.")
-        else:
-            resposta = gerar_resposta(query, contexto)
-            st.write("### Resultado da web:")
-            st.write(contexto)
-            st.write("### Resposta MOREIRAGPT:")
-            st.write(resposta)
+with st.form("form", clear_on_submit=True):
+    pergunta = st.text_input("Faça uma pergunta para MOREIRAGPT:")
+    submit = st.form_submit_button("Enviar")
+
+if submit and pergunta:
+    with st.spinner("Pesquisando e gerando resposta..."):
+        resposta = gera_resposta(pergunta)
+        st.session_state.history.append((pergunta, resposta))
+
+if st.session_state.history:
+    for i, (perg, resp) in enumerate(reversed(st.session_state.history)):
+        st.markdown(f"**Você:** {perg}")
+        st.markdown(f"**MOREIRAGPT:** {resp}")
+        if i != len(st.session_state.history) - 1:
+            st.markdown("---")
