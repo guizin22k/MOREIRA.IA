@@ -4,24 +4,61 @@ import requests
 from bs4 import BeautifulSoup
 import time
 
-# ================= CONFIGURAÇÕES =================
 st.set_page_config(
-    page_title="MOREIRAGPT 2.0 🤖",
+    page_title="MOREIRAGPT 2.0",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# Inicializa cliente OpenAI com sua chave do secrets
-client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# --- Estilos CSS customizados para interface futurista ---
+st.markdown(
+    """
+    <style>
+    .main > div { max-width: 900px; margin: auto; }
+    .css-1d391kg { background: linear-gradient(135deg, #1f005c, #5b0060); }
+    .stButton>button {
+        background: linear-gradient(45deg, #ff6a00, #ee0979);
+        color: white;
+        font-weight: bold;
+        border-radius: 12px;
+        height: 45px;
+        width: 100%;
+        transition: 0.3s ease;
+    }
+    .stButton>button:hover {
+        background: linear-gradient(45deg, #ee0979, #ff6a00);
+        transform: scale(1.05);
+    }
+    .css-18e3th9 { padding: 2rem 1rem 2rem 1rem; }
+    .streamlit-expanderHeader {
+        font-size: 18px;
+        font-weight: 700;
+        color: #ff6a00;
+    }
+    .css-1aumxhk { color: #ddd !important; }
+    .css-ffhzg2 { color: #aaa !important; }
+    .css-10trblm { font-family: 'Roboto Mono', monospace; }
+    pre {
+        background-color: #222;
+        color: #eee;
+        padding: 15px;
+        border-radius: 10px;
+        overflow-x: auto;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-# ================= BIBLIOTECA ===================
-
-def buscar_na_web(pergunta, max_results=5):
+# --- Função para buscar na web via DuckDuckGo ---
+def buscar_na_web(pergunta, max_results=4):
     try:
         url = f"https://duckduckgo.com/html/?q={pergunta.replace(' ', '+')}"
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; MoreiraBot/2.0)"}
-        r = requests.get(url, headers=headers, timeout=10)
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; MoreiraBot/1.0)"}
+        r = requests.get(url, headers=headers, timeout=8)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
             resultados = soup.find_all('div', class_='result__body', limit=max_results)
@@ -39,6 +76,7 @@ def buscar_na_web(pergunta, max_results=5):
     except Exception as e:
         return [f"Erro ao buscar na web: {str(e)}"]
 
+# --- Prompt do sistema para a IA ---
 def gerar_mensagem_sistema():
     return (
         "Você é a MOREIRAGPT 2.0, uma assistente ultra avançada, focada em:\n"
@@ -55,6 +93,7 @@ def gerar_mensagem_sistema():
         "Responda SEMPRE de forma clara, convincente e orientada a resultados reais."
     )
 
+# --- Interpretador de comandos especiais ---
 def interpretar_comando(prompt):
     prompt = prompt.strip()
     if prompt.startswith("/web"):
@@ -63,152 +102,127 @@ def interpretar_comando(prompt):
             return "Por favor, informe o termo para busca após /web."
         resultados = buscar_na_web(termo, max_results=5)
         return "\n\n".join(resultados)
-    # Outros comandos ficam para GPT processar
+
+    if prompt.startswith("/marketing"):
+        return (
+            "Dicas poderosas para marketing digital:\n"
+            "- Conheça profundamente seu público\n"
+            "- Utilize gatilhos mentais (escassez, autoridade)\n"
+            "- Crie conteúdo que resolva dores reais\n"
+            "- Teste anúncios e otimize constantemente\n"
+            "- Use redes sociais para criar autoridade\n"
+        )
+
+    if prompt.startswith("/vendas"):
+        return (
+            "Estratégias para vender mais:\n"
+            "- Entenda a dor do cliente, ofereça solução clara\n"
+            "- Use provas sociais (depoimentos, cases)\n"
+            "- Faça ofertas irresistíveis e limitadas\n"
+            "- Crie urgência sem pressão exagerada\n"
+            "- Follow-up é essencial para fechar vendas\n"
+        )
+
+    if prompt.startswith("/hábitos"):
+        return (
+            "Sugestões para formar hábitos poderosos:\n"
+            "- Comece pequeno e aumente gradativamente\n"
+            "- Use gatilhos diários para lembrar a ação\n"
+            "- Mantenha disciplina com recompensas\n"
+            "- Evite tentar mudar tudo de uma vez\n"
+            "- Tenha um diário para monitorar progresso\n"
+        )
+
+    # Sem comando especial, retorna None para usar GPT normal
     return None
 
-def enviar_mensagem_openai(mensagens, client):
-    try:
-        resposta = client.chat.completions.create(
-            model="gpt-4",
-            messages=mensagens,
-            temperature=0.8,
-            max_tokens=900,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0.3,
-            timeout=15,
+# --- Função que chama a API OpenAI ---
+def enviar_mensagem_openai(mensagens, client, retries=3):
+    for tentativa in range(retries):
+        try:
+            resposta = client.chat.completions.create(
+                model="gpt-4",
+                messages=mensagens,
+                temperature=0.8,
+                max_tokens=900,
+                top_p=1,
+                frequency_penalty=0,
+                presence_penalty=0.3,
+                timeout=10,
+            )
+            return resposta.choices[0].message.content.strip()
+        except Exception as e:
+            if tentativa < retries - 1:
+                time.sleep(1)  # espera e tenta novamente
+            else:
+                return f"Erro ao obter resposta da IA: {str(e)}"
+
+# --- Inicializa a API OpenAI ---
+def init_openai():
+    api_key = st.secrets.get("OPENAI_API_KEY", None)
+    if not api_key:
+        st.error("⚠️ A chave da API OpenAI não está configurada nos Secrets do Streamlit!")
+        st.stop()
+    return openai.OpenAI(api_key=api_key)
+
+# --- Interface principal ---
+def main():
+    st.title("🤖 MOREIRAGPT 2.0 — Sua IA Máquina de Dinheiro")
+    st.markdown(
+        "Uma assistente inteligente para te ajudar em crescimento pessoal, marketing, vendas, hábitos e buscas na web."
+    )
+
+    client = init_openai()
+
+    if "historico" not in st.session_state:
+        st.session_state.historico = []
+
+    with st.sidebar.expander("🛠️ Como usar / Comandos especiais"):
+        st.markdown(
+            """
+            - Escreva perguntas ou comandos na caixa abaixo e envie.
+            - Comandos especiais (inicie a mensagem com):
+              - `/marketing` — dicas de marketing digital
+              - `/vendas` — técnicas para vender mais
+              - `/hábitos` — dicas para criar hábitos poderosos
+              - `/web termo` — busca e resumo na web
+            - Use linguagem natural para conversar normalmente.
+            - Limpe o histórico com o botão abaixo.
+            """
         )
-        return resposta.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Erro ao obter resposta da IA: {str(e)}"
+        if st.button("🧹 Limpar histórico"):
+            st.session_state.historico = []
 
-# ================== INTERFACE =====================
+    prompt_usuario = st.text_area(
+        "Escreva aqui sua pergunta ou comando:",
+        height=100,
+        placeholder="Ex: /marketing ou Me dê dicas para vender mais"
+    )
 
-# Fundo estilizado com CSS
-st.markdown(
-    """
-    <style>
-    .main {
-        background: linear-gradient(135deg, #1f1c2c, #928dab);
-        color: white;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    .title {
-        font-size: 3.5rem;
-        font-weight: 900;
-        text-align: center;
-        margin-top: 1rem;
-        letter-spacing: 0.15rem;
-        background: -webkit-linear-gradient(#2C6EFA, #00FFD1);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    .subtitle {
-        text-align: center;
-        font-size: 1.3rem;
-        margin-bottom: 2rem;
-        color: #A1A1A1;
-    }
-    .chat-box {
-        background-color: #2a2a3d;
-        border-radius: 15px;
-        padding: 20px;
-        max-height: 550px;
-        overflow-y: auto;
-        box-shadow: 0 0 12px #00ffd1;
-        font-size: 1.1rem;
-    }
-    .user-msg {
-        color: #00FFD1;
-        font-weight: 700;
-    }
-    .bot-msg {
-        color: #FFFFFF;
-        margin-bottom: 1rem;
-    }
-    .footer {
-        text-align: center;
-        font-size: 0.85rem;
-        margin-top: 3rem;
-        color: #666;
-    }
-    input[type="text"] {
-        border-radius: 12px;
-        border: 2px solid #00FFD1;
-        padding: 12px 15px;
-        font-size: 1.1rem;
-        width: 100%;
-        background-color: #1f1c2c;
-        color: white;
-        outline: none;
-        transition: border-color 0.3s ease;
-    }
-    input[type="text"]:focus {
-        border-color: #2C6EFA;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+    if st.button("Enviar") and prompt_usuario.strip():
+        st.session_state.historico.append({"user": prompt_usuario})
+        resposta_comando = interpretar_comando(prompt_usuario)
+        if resposta_comando:
+            st.session_state.historico.append({"bot": resposta_comando})
+        else:
+            mensagens = [
+                {"role": "system", "content": gerar_mensagem_sistema()},
+            ]
+            for msg in st.session_state.historico:
+                if "user" in msg:
+                    mensagens.append({"role": "user", "content": msg["user"]})
+                if "bot" in msg:
+                    mensagens.append({"role": "assistant", "content": msg["bot"]})
 
-st.markdown("<div class='title'>🤖 MOREIRAGPT 2.0</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Sua IA parceira para crescimento, disciplina e renda online</div>", unsafe_allow_html=True)
-st.markdown("---")
-
-# Histórico da conversa na sessão
-if "historico" not in st.session_state:
-    st.session_state["historico"] = []
-
-# Caixa de input lateral para instruções rápidas
-with st.sidebar:
-    st.header("⚙️ Comandos Rápidos")
-    st.markdown("""
-    - **/marketing** — estratégias de marketing digital e vendas  
-    - **/vendas** — dicas e técnicas de vendas  
-    - **/hábitos** — disciplina, rotina e hábitos  
-    - **/web [termo]** — pesquisa rápida na web  
-    ---
-    Dica: Sempre use comandos para respostas especializadas.
-    """)
-
-entrada = st.text_input("Digite sua pergunta ou comando:", placeholder="Ex: /marketing Como crescer no TikTok em 2025?")
-
-if entrada:
-    resposta_comando = interpretar_comando(entrada)
-
-    if resposta_comando is not None:
-        # Exibe resposta do comando especial (/web)
-        st.info(resposta_comando)
-        st.session_state["historico"].append({"user": entrada, "bot": resposta_comando})
-    else:
-        # Monta histórico para contexto (últimas 5 trocas)
-        mensagens = [{"role": "system", "content": gerar_mensagem_sistema()}]
-        for troca in st.session_state["historico"][-5:]:
-            mensagens.append({"role": "user", "content": troca["user"]})
-            mensagens.append({"role": "assistant", "content": troca["bot"]})
-        mensagens.append({"role": "user", "content": entrada})
-
-        with st.spinner("Pensando como Moreira..."):
             resposta_ia = enviar_mensagem_openai(mensagens, client)
+            st.session_state.historico.append({"bot": resposta_ia})
 
-        st.success("Resposta da MOREIRAGPT:")
-        st.markdown(resposta_ia)
+    # Exibir histórico
+    for i, troca in enumerate(st.session_state.historico):
+        if "user" in troca:
+            st.markdown(f"<p style='color:#ff6a00; font-weight:600;'>Você:</p> {troca['user']}", unsafe_allow_html=True)
+        if "bot" in troca:
+            st.markdown(f"<p style='color:#eee; background:#222; border-radius:10px; padding:10px;'>{troca['bot']}</p>", unsafe_allow_html=True)
 
-        st.session_state["historico"].append({"user": entrada, "bot": resposta_ia})
-
-# Exibe histórico de conversa com estilo
-if st.session_state["historico"]:
-    st.markdown("---")
-    st.markdown("### Histórico da conversa")
-    for troca in reversed(st.session_state["historico"][-10:]):
-        st.markdown(f"<p class='user-msg'>Você: {troca['user']}</p>", unsafe_allow_html=True)
-        st.markdown(f"<p class='bot-msg'>🤖 MOREIRAGPT: {troca['bot']}</p>", unsafe_allow_html=True)
-        st.markdown("---")
-
-# Rodapé
-st.markdown(
-    """
-    <div class='footer'>Powered by OpenAI • Feito com ❤️ por Moreira</div>
-    """,
-    unsafe_allow_html=True
-)
+if __name__ == "__main__":
+    main()
