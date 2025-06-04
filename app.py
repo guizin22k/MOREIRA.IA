@@ -1,38 +1,37 @@
 import streamlit as st
 from openai import OpenAI
 import requests
+import json
 
-# Inicializa o cliente OpenAI com a chave segura do secrets
 client = OpenAI(api_key=st.secrets["openai_api_key"])
+SERPAPI_KEY = st.secrets["serpapi_key"]
 
-st.title("MOREIRA.IA - Chat com busca web")
+st.title("MOREIRA.IA - Com busca na web (ao vivo)")
 
-def busca_wikipedia(consulta):
-    url = f"https://pt.wikipedia.org/api/rest_v1/page/summary/{consulta}"
+def buscar_web(query):
+    url = f"https://serpapi.com/search.json?q={query}&hl=pt-br&gl=br&api_key={SERPAPI_KEY}"
     resposta = requests.get(url)
     if resposta.status_code == 200:
         dados = resposta.json()
-        return dados.get("extract", "Sem resumo encontrado.")
+        if "answer_box" in dados and "answer" in dados["answer_box"]:
+            return dados["answer_box"]["answer"]
+        elif "organic_results" in dados and len(dados["organic_results"]) > 0:
+            return dados["organic_results"][0].get("snippet", "Sem resposta direta.")
+        else:
+            return "Não encontrei uma resposta direta na web."
     else:
-        return "Não consegui encontrar nada no Wikipedia."
+        return "Erro ao buscar na internet."
 
 if "messages" not in st.session_state:
-    st.session_state["messages"] = [{"role": "system", "content": "Você é um assistente útil que responde perguntas de forma clara e objetiva."}]
+    st.session_state["messages"] = [{"role": "system", "content": "Você é uma IA que responde perguntas com ajuda da internet."}]
 
-user_input = st.text_input("Você:", key="input")
+user_input = st.text_input("Pergunte algo:")
 
 if user_input:
-    termo_busca = user_input.split("?")[0].strip().replace(" ", "_")
-    resumo = busca_wikipedia(termo_busca)
+    resultado_web = buscar_web(user_input)
+    contexto = f"Resultado da web: {resultado_web}"
 
-    contexto = f"Aqui está um resumo do Wikipedia sobre '{termo_busca}': {resumo}"
-
-    st.session_state["messages"][0]["content"] = (
-        "Você é um assistente útil que responde perguntas de forma clara e objetiva.\n"
-        + contexto
-    )
-
-    st.session_state["messages"].append({"role": "user", "content": user_input})
+    st.session_state["messages"].append({"role": "user", "content": f"{user_input}\n\n{contexto}"})
 
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
@@ -41,8 +40,8 @@ if user_input:
         temperature=0.7,
     )
 
-    answer = response.choices[0].message.content
-    st.session_state["messages"].append({"role": "assistant", "content": answer})
+    resposta = response.choices[0].message.content
+    st.session_state["messages"].append({"role": "assistant", "content": resposta})
 
     for msg in st.session_state["messages"]:
         if msg["role"] == "user":
