@@ -1,40 +1,31 @@
 import streamlit as st
-import replicate
-from PIL import Image
-import io
+import duckduckgo_search
+from duckduckgo_search import DDGS
 
-st.set_page_config(page_title="MOREIRA.IA - Gerador de Imagens", page_icon="🎨", layout="centered")
+st.set_page_config(page_title="MOREIRA.IA", page_icon="🤖", layout="centered")
 
 st.markdown("""
-    <h1 style='text-align: center; color: #007FFF;'>🎨 MOREIRA.IA</h1>
-    <p style='text-align: center;'>Gere imagens incríveis com base em uma imagem enviada + seu comando em texto.</p>
+    <h1 style='text-align: center; color: #007FFF;'>🤖 MOREIRA.IA</h1>
+    <p style='text-align: center;'>Sua inteligência artificial pessoal com respostas baseadas na web.</p>
 """, unsafe_allow_html=True)
 
-# Inserir sua chave de API do Replicate (use variável de ambiente na versão final)
-REPLICATE_API_TOKEN = "sua_chave_aqui"
-replicate.Client(api_token=REPLICATE_API_TOKEN)
+query = st.text_input("Digite sua pergunta ou comando", "")
 
-uploaded_image = st.file_uploader("📷 Envie uma imagem base (jpg ou png)", type=["jpg", "jpeg", "png"])
-prompt = st.text_input("✍️ O que deseja adicionar ou modificar na imagem?")
-generate = st.button("🚀 Gerar imagem com IA")
+def buscar_na_web(pergunta):
+    with DDGS() as ddgs:
+        resultados = ddgs.text(pergunta, max_results=5)
+        resposta = ""
+        for r in resultados:
+            resposta += f"- [{r['title']}]({r['href']}): {r['body']}\n"
+        return resposta if resposta else "❌ Nenhum resultado encontrado."
 
-if uploaded_image and prompt and generate:
-    image = Image.open(uploaded_image).convert("RGB")
-    img_bytes = io.BytesIO()
-    image.save(img_bytes, format="PNG")
-    img_bytes.seek(0)
-
-    with st.spinner("🧠 Gerando imagem com IA..."):
-        output_url = replicate.run(
-            "stability-ai/stable-diffusion-img2img",
-            input={
-                "image": img_bytes,
-                "prompt": prompt,
-                "strength": 0.6,
-                "num_inference_steps": 50,
-                "guidance_scale": 7.5
-            }
-        )
-
-    st.image(output_url, caption="🖼️ Imagem gerada pela IA")
-
+if st.button("🔍 Pesquisar"):
+    if query:
+        if query.startswith("/marketing"):
+            st.info("📢 Estratégia de marketing em breve aqui!")
+        else:
+            st.markdown("🔎 Buscando na web...")
+            resultado = buscar_na_web(query)
+            st.markdown(resultado)
+    else:
+        st.warning("Digite algo para buscar.")
