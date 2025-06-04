@@ -1,31 +1,56 @@
 import streamlit as st
-import duckduckgo_search
-from duckduckgo_search import DDGS
+from PIL import Image
+import io
+import replicate
+import os
 
-st.set_page_config(page_title="MOREIRA.IA", page_icon="🤖", layout="centered")
+# Configurações básicas
+st.set_page_config(page_title="MOREIRA.IA - Gerador de Imagens", layout="centered")
 
+# Título
 st.markdown("""
-    <h1 style='text-align: center; color: #007FFF;'>🤖 MOREIRA.IA</h1>
-    <p style='text-align: center;'>Sua inteligência artificial pessoal com respostas baseadas na web.</p>
+    <h1 style='text-align: center; color: #007FFF; font-weight: bold;'>🎨 MOREIRA.IA</h1>
+    <p style='text-align: center; color: #007FFF;'>Envie uma imagem, descreva o que quer modificar e gere uma nova imagem com IA</p>
 """, unsafe_allow_html=True)
 
-query = st.text_input("Digite sua pergunta ou comando", "")
+# Função para estilizar o botão "+" para upload (usando HTML + CSS)
+st.markdown("""
+    <style>
+    div.stUpload {
+        text-align: center;
+        font-size: 72px;
+        font-weight: bold;
+        color: #007FFF;
+        cursor: pointer;
+        border: 3px dashed #007FFF;
+        border-radius: 12px;
+        padding: 40px;
+        margin: 20px auto;
+        max-width: 320px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-def buscar_na_web(pergunta):
-    with DDGS() as ddgs:
-        resultados = ddgs.text(pergunta, max_results=5)
-        resposta = ""
-        for r in resultados:
-            resposta += f"- [{r['title']}]({r['href']}): {r['body']}\n"
-        return resposta if resposta else "❌ Nenhum resultado encontrado."
+# Aqui criamos um widget normal, mas o style acima deixa ele "grande e com borda +"
+uploaded_file = st.file_uploader("➕", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
 
-if st.button("🔍 Pesquisar"):
-    if query:
-        if query.startswith("/marketing"):
-            st.info("📢 Estratégia de marketing em breve aqui!")
-        else:
-            st.markdown("🔎 Buscando na web...")
-            resultado = buscar_na_web(query)
-            st.markdown(resultado)
-    else:
-        st.warning("Digite algo para buscar.")
+prompt = st.text_input("✍️ O que deseja modificar ou adicionar na imagem?")
+
+if uploaded_file and prompt:
+    image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Imagem original enviada", use_column_width=True)
+
+    with st.spinner("🧠 Gerando nova imagem com IA..."):
+        # Pega chave do secrets (variável ambiente)
+        REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+        client = replicate.Client(api_token=REPLICATE_API_TOKEN)
+
+        # Converte imagem para bytes para enviar
+        img_bytes = io.BytesIO()
+        image.save(img_bytes, format="PNG")
+        img_bytes.seek(0)
+
+        # Executa modelo img2img no replicate
+        output_urls = client.run(
+            "stability-ai/stable-diffusion-img2img",
+            input={
