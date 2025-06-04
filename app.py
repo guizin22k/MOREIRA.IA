@@ -1,51 +1,40 @@
 import streamlit as st
-from duckduckgo_search import DDGS
-from openai import OpenAI
-import os
+import replicate
+from PIL import Image
+import io
 
-# Título da página
-st.set_page_config(page_title="MOREIRAGPT", page_icon="🤖", layout="centered")
-st.markdown("<h1 style='color:#1f77b4;text-align:center;'>MOREIRAGPT 💬</h1>", unsafe_allow_html=True)
-st.markdown("### Sua assistente com respostas diretas da web!")
+st.set_page_config(page_title="MOREIRA.IA - Gerador de Imagens", page_icon="🎨", layout="centered")
 
-# Chave da API OpenAI
-client = OpenAI(api_key=st.secrets["openai_api_key"])
+st.markdown("""
+    <h1 style='text-align: center; color: #007FFF;'>🎨 MOREIRA.IA</h1>
+    <p style='text-align: center;'>Gere imagens incríveis com base em uma imagem enviada + seu comando em texto.</p>
+""", unsafe_allow_html=True)
 
-# Função de busca na web
-def buscar_web_duckduckgo(pergunta):
-    with DDGS() as ddgs:
-        resultados = ddgs.text(pergunta, max_results=5)
-        respostas = [r["body"] for r in resultados if "body" in r]
-        return respostas
+# Inserir sua chave de API do Replicate (use variável de ambiente na versão final)
+REPLICATE_API_TOKEN = "sua_chave_aqui"
+replicate.Client(api_token=REPLICATE_API_TOKEN)
 
-# Função que gera uma resposta clara com base na web
-def gerar_resposta(pergunta):
-    resultados = buscar_web_duckduckgo(pergunta)
-    
-    if not resultados:
-        return "❌ Não encontrei nada relevante na web."
+uploaded_image = st.file_uploader("📷 Envie uma imagem base (jpg ou png)", type=["jpg", "jpeg", "png"])
+prompt = st.text_input("✍️ O que deseja adicionar ou modificar na imagem?")
+generate = st.button("🚀 Gerar imagem com IA")
 
-    contexto = "\n\n".join(resultados[:3])
-    prompt = f"""Responda com clareza e estilo humano à pergunta abaixo, usando SOMENTE o conteúdo da web.
-    
-Pergunta: {pergunta}
-Conteúdo da web:
-{contexto}
+if uploaded_image and prompt and generate:
+    image = Image.open(uploaded_image).convert("RGB")
+    img_bytes = io.BytesIO()
+    image.save(img_bytes, format="PNG")
+    img_bytes.seek(0)
 
-Resposta:"""
+    with st.spinner("🧠 Gerando imagem com IA..."):
+        output_url = replicate.run(
+            "stability-ai/stable-diffusion-img2img",
+            input={
+                "image": img_bytes,
+                "prompt": prompt,
+                "strength": 0.6,
+                "num_inference_steps": 50,
+                "guidance_scale": 7.5
+            }
+        )
 
-    resposta = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
-    )
+    st.image(output_url, caption="🖼️ Imagem gerada pela IA")
 
-    return resposta.choices[0].message.content.strip()
-
-# Interface do usuário
-pergunta = st.text_input("Você:", placeholder="Digite aqui sua pergunta...")
-
-if pergunta:
-    with st.spinner("Consultando a web..."):
-        resposta = gerar_resposta(pergunta)
-    st.markdown(f"**MOREIRAGPT:** {resposta}")
