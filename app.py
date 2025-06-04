@@ -1,80 +1,59 @@
 import streamlit as st
-from PIL import Image
-import io
 import os
-import base64
-import replicate
+import openai
 
-st.set_page_config(page_title="MOREIRA.IA Chat Misto", layout="centered")
+st.set_page_config(page_title="MOREIRA.IA Chat Vendas", layout="centered")
 
 st.markdown("""
-    <h1 style='text-align: center; color: #007FFF; font-weight: bold;'>🤖 MOREIRA.IA Chat Misto</h1>
-    <p style='text-align: center; color: #007FFF;'>Envie texto, imagem, ou ambos. Receba respostas e imagens geradas pela IA.</p>
+    <h1 style='text-align: center; color: #007FFF;'>💬 MOREIRA.IA - Chat Inteligente</h1>
+    <p style='text-align: center;'>Use comandos como <code>/vendas</code>, <code>/marketing</code> ou apenas fale comigo!</p>
 """, unsafe_allow_html=True)
 
-user_text = st.text_area("Digite sua mensagem ou prompt para a IA:", height=100)
-uploaded_file = st.file_uploader("➕ Envie uma imagem (opcional)", type=["jpg", "jpeg", "png"])
+# Entrada do usuário
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-default_prompt = ("Transforme esta imagem mantendo sua composição principal, mas adicione iluminação dramática "
-                  "e realismo fotográfico, com cores vibrantes e um fundo artístico abstrato. "
-                  "Faça a imagem parecer uma obra-prima digital hiper-realista, preservando detalhes nítidos "
-                  "e uma atmosfera envolvente.")
+user_input = st.chat_input("Digite sua mensagem ou comando...")
 
-if st.button("Inserir prompt padrão"):
-    user_text = default_prompt
-    st.experimental_rerun()
+# Configurar OpenAI
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai.api_key = OPENAI_API_KEY
 
-def gerar_imagem(img: Image.Image, prompt: str):
-    REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
-    if not REPLICATE_API_TOKEN:
-        st.error("❗️ Chave da API Replicate não encontrada.")
-        return None
-
-    client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-
-    buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
-    img_bytes = buffered.getvalue()
-    img_base64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
-
+# Função para resposta da IA
+def gerar_resposta(prompt):
     try:
-        output_urls = client.run(
-            "stability-ai/stable-diffusion-img2img@15a3689e",
-            input={
-                "image": img_base64,
-                "prompt": prompt if prompt.strip() else default_prompt,
-                "strength": 0.6,
-                "num_inference_steps": 50,
-                "guidance_scale": 7.5
-            }
+        resposta = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=st.session_state.chat_history + [{"role": "user", "content": prompt}]
         )
-        return output_urls
+        return resposta.choices[0].message.content
     except Exception as e:
-        st.error(f"Erro ao gerar imagem: {e}")
-        return None
+        return f"⚠️ Erro ao gerar resposta: {str(e)}"
 
-if st.button("Enviar"):
-    if uploaded_file and user_text.strip():
-        image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Imagem original", use_container_width=True)
-        st.write(f"Prompt enviado: {user_text}")
+# Processar entrada
+if user_input:
+    st.session_state.chat_history.append({"role": "user", "content": user_input})
 
-        result = gerar_imagem(image, user_text)
-        if result:
-            st.image(result, caption="Imagem gerada pela IA", use_container_width=True)
-
-    elif uploaded_file and not user_text.strip():
-        image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Imagem original", use_container_width=True)
-        st.write("Usando prompt padrão para modificar a imagem.")
-        result = gerar_imagem(image, default_prompt)
-        if result:
-            st.image(result, caption="Imagem gerada pela IA", use_container_width=True)
-
-    elif not uploaded_file and user_text.strip():
-        st.write("Você enviou apenas texto:")
-        st.write(user_text)
-        st.write("💡 Aqui você pode integrar GPT futuramente para respostas em texto.")
-
+    if user_input.startswith("/vendas"):
+        comando = user_input.replace("/vendas", "").strip()
+        prompt = f"Crie uma copy de vendas para: {comando}" if comando else "Crie uma copy de vendas genérica para um produto digital."
+    elif user_input.startswith("/marketing"):
+        comando = user_input.replace("/marketing", "").strip()
+        prompt = f"Me dê 3 ideias de vídeos virais sobre: {comando}" if comando else "Me dê 3 ideias de vídeos virais para vender um curso."
+    elif user_input.startswith("/meta"):
+        prompt = "Me motive com uma frase forte e direta sobre disciplina e foco."
     else:
-        st.info("📸 Por favor, envie uma mensagem, uma imagem, ou ambos para interagir com a IA.")
+        prompt = user_input
+
+    resposta = gerar_resposta(prompt)
+    st.session_state.chat_history.append({"role": "assistant", "content": resposta})
+
+# Exibir chat
+for msg in st.session_state.chat_history:
+    with st.chat_message("user" if msg["role"] == "user" else "ai"):
+        st.markdown(msg["content"])
+
+st.markdown("""
+    <hr>
+    <p style='text-align: center; font-size: 12px;'>MOREIRA.IA - versão texto inteligente 🚀</p>
+""", unsafe_allow_html=True)
