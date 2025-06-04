@@ -1,59 +1,67 @@
 import streamlit as st
-import os
 import openai
+import requests
 
-st.set_page_config(page_title="MOREIRA.IA Chat Vendas", layout="centered")
+# ================= CONFIG =================
+st.set_page_config(page_title="MOREIRAGPT", page_icon="🤖", layout="wide")
+client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
+# ================ UI =====================
 st.markdown("""
-    <h1 style='text-align: center; color: #007FFF;'>💬 MOREIRA.IA - Chat Inteligente</h1>
-    <p style='text-align: center;'>Use comandos como <code>/vendas</code>, <code>/marketing</code> ou apenas fale comigo!</p>
+    <h1 style='text-align: center; color: #2C6EFA;'>🤖 MOREIRAGPT</h1>
+    <p style='text-align: center;'>Sua IA parceira para crescimento, disciplina e renda online</p>
+    <hr>
 """, unsafe_allow_html=True)
 
-# Entrada do usuário
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+# =============== HELPERS ================
+def buscar_na_web(pergunta):
+    url = f"https://duckduckgo.com/html/?q={pergunta.replace(' ', '+')}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(r.text, 'html.parser')
+        resultados = soup.find_all('a', class_='result__a')
+        links = [a['href'] for a in resultados[:3] if a.has_attr('href')]
+        return links
+    return []
 
-user_input = st.chat_input("Digite sua mensagem ou comando...")
+def gerar_mensagem_sistema():
+    return (
+        "Você é a MOREIRAGPT, uma IA treinada para ajudar o usuário a evoluir pessoalmente, superar vícios, melhorar hábitos, ganhar dinheiro online com estratégias de vendas, marketing e disciplina.\n"
+        "Seja clara, direta e humana. Use uma linguagem prática, atualizada e adaptada à realidade do usuário.\n"
+        "Você entende comandos especiais como /marketing, /vendas, /hábitos, /web e responde com foco total no resultado."
+    )
 
-# Configurar OpenAI
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
+def interpretar_comando(prompt):
+    if prompt.startswith("/web"):
+        busca = prompt.replace("/web", "").strip()
+        links = buscar_na_web(busca)
+        return f"Resultados encontrados:\n" + "\n".join(links) if links else "Nenhum resultado encontrado."
+    return None
 
-# Função para resposta da IA
-def gerar_resposta(prompt):
-    try:
-        resposta = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=st.session_state.chat_history + [{"role": "user", "content": prompt}]
-        )
-        return resposta.choices[0].message.content
-    except Exception as e:
-        return f"⚠️ Erro ao gerar resposta: {str(e)}"
+# ============= INTERAÇÃO ================
+prompt = st.text_input("Digite sua pergunta ou comando:", placeholder="Ex: /marketing Como crescer no TikTok em 2025?")
 
-# Processar entrada
-if user_input:
-    st.session_state.chat_history.append({"role": "user", "content": user_input})
+if prompt:
+    resposta_comando = interpretar_comando(prompt)
 
-    if user_input.startswith("/vendas"):
-        comando = user_input.replace("/vendas", "").strip()
-        prompt = f"Crie uma copy de vendas para: {comando}" if comando else "Crie uma copy de vendas genérica para um produto digital."
-    elif user_input.startswith("/marketing"):
-        comando = user_input.replace("/marketing", "").strip()
-        prompt = f"Me dê 3 ideias de vídeos virais sobre: {comando}" if comando else "Me dê 3 ideias de vídeos virais para vender um curso."
-    elif user_input.startswith("/meta"):
-        prompt = "Me motive com uma frase forte e direta sobre disciplina e foco."
+    if resposta_comando:
+        st.info(resposta_comando)
     else:
-        prompt = user_input
+        with st.spinner("Pensando como Moreira..."):
+            resposta = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": gerar_mensagem_sistema()},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            st.success("Resposta da MOREIRAGPT:")
+            st.markdown(resposta.choices[0].message.content)
 
-    resposta = gerar_resposta(prompt)
-    st.session_state.chat_history.append({"role": "assistant", "content": resposta})
-
-# Exibir chat
-for msg in st.session_state.chat_history:
-    with st.chat_message("user" if msg["role"] == "user" else "ai"):
-        st.markdown(msg["content"])
-
+# ============== RODAPÉ =================
 st.markdown("""
-    <hr>
-    <p style='text-align: center; font-size: 12px;'>MOREIRA.IA - versão texto inteligente 🚀</p>
+<hr>
+<p style='text-align: center; font-size: 0.8em;'>Powered by OpenAI • Feito com ❤️ por Moreira</p>
 """, unsafe_allow_html=True)
