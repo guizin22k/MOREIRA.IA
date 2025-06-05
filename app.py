@@ -2,117 +2,73 @@ import streamlit as st
 from system_prompt import SYSTEM_PROMPT
 from duckduckgo_search import DDGS
 from dotenv import load_dotenv
-from openai import OpenAI
+import openai
 import os
+import time
 
 load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Cria o cliente da OpenAI com a chave da env
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+st.set_page_config(page_title="🤖 MOREIRAGPT", page_icon="🤖", layout="centered")
 
-st.set_page_config(page_title="MOREIRAGPT 2026", page_icon="🤖", layout="centered")
-
-# CSS customizado para balões de conversa e estilos
-st.markdown(
-    """
-    <style>
-    .chat-message {
-        padding: 10px 15px;
-        border-radius: 15px;
-        margin-bottom: 10px;
-        max-width: 80%;
-        font-size: 16px;
-        line-height: 1.4;
-        white-space: pre-wrap;
-    }
-    .user-message {
-        background-color: #DCF8C6;
-        text-align: right;
-        margin-left: auto;
-    }
-    .bot-message {
-        background-color: #F1F0F0;
-        text-align: left;
-        margin-right: auto;
-    }
-    .scrollable-chat {
-        height: 500px;
-        overflow-y: auto;
-        padding: 10px;
-        border: 1px solid #ddd;
-        border-radius: 10px;
-        background-color: #fff;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
+# Inicializa memória de conversa
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-st.title("🤖 MOREIRAGPT 2026")
+# Cache para resultados de busca
+@st.cache_data(ttl=600)
+def search_web(query):
+    try:
+        with DDGS() as ddgs:
+            results = ddgs.text(query, max_results=3)
+            textos = [r["body"] for r in results]
+            return "\n\n".join(textos)
+    except Exception as e:
+        return f"Erro na busca: {e}"
 
-def search_web(query: str) -> str:
-    with DDGS() as ddgs:
-        results = ddgs.text(query, max_results=3)
-        return "\n\n".join([r["body"] for r in results])
-
-def chat_with_gpt(messages: list) -> str:
-    response = client.chat.completions.create(
-        model="gpt-4",
+# Função de chamada ao GPT
+def chat_with_gpt(messages):
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
         messages=messages,
         temperature=0.6,
+        max_tokens=1000,
     )
-    return response.choices[0].message.content
+    return response["choices"][0]["message"]["content"]
 
-def render_message(role: str, content: str):
-    css_class = "user-message" if role == "user" else "bot-message"
-    label = "Você" if role == "user" else "MoreiraGPT"
-    st.markdown(
-        f'<div class="chat-message {css_class}"><b>{label}:</b><br>{content}</div>',
-        unsafe_allow_html=True,
-    )
+st.title("🤖 MOREIRAGPT - IA do Moreira")
 
-chat_container = st.container()
+user_input = st.text_input("Digite sua mensagem ou comando:")
 
-with st.form(key="input_form", clear_on_submit=True):
-    user_input = st.text_area(
-        "Digite sua mensagem ou comando (use /web para pesquisa na web):",
-        placeholder="Escreva aqui e pressione Enviar...",
-        height=100,
-        max_chars=1000,
-    )
-    submitted = st.form_submit_button("Enviar")
-
-if submitted and user_input.strip():
-    if user_input.startswith("/web"):
-        termo = user_input[4:].strip()
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.spinner("Buscando na web..."):
-            resultados = search_web(termo)
-        st.session_state.messages.append(
-            {
-                "role": "system",
-                "content": f"Resultados da busca para '{termo}':\n{resultados}",
-            }
-        )
-    elif user_input.strip() == "/limpar":
+if user_input:
+    if user_input.strip() == "/limpar":
         st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        st.experimental_rerun()
+        st.success("Histórico apagado com sucesso!")
+        st.experimental_rerun()  # Recarrega app para resetar input
     else:
+        if user_input.startswith("/web "):
+            termo = user_input[5:].strip()
+            st.info(f"Buscando na web por: {termo}")
+            resultados = search_web(termo)
+            # Acrescenta resultados encontrados à mensagem do usuário
+            user_input += f"\n\nINFORMAÇÕES ENCONTRADAS NA WEB:\n{resultados}"
+
+        # Adiciona input do usuário à memória
         st.session_state.messages.append({"role": "user", "content": user_input})
 
-    with st.spinner("MoreiraGPT está pensando..."):
-        resposta = chat_with_gpt(st.session_state.messages)
+        with st.spinner("Pensando..."):
+            resposta = chat_with_gpt(st.session_state.messages)
+
+        # Salva resposta na memória
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
-with chat_container:
-    st.markdown('<div class="scrollable-chat">', unsafe_allow_html=True)
-    for msg in st.session_state.messages[1:]:
-        render_message(msg["role"], msg["content"])
-    st.markdown("</div>", unsafe_allow_html=True)
+# Exibe o chat completo, mas omite sistema
+for msg in st.session_state.messages[1:]:
+    if msg["role"] == "user":
+        st.markdown(f"**Você:** {msg['content']}")
+    else:
+        st.markdown(f"**MoreiraGPT:** {msg['content']}")
 
-if st.button("🧹 Limpar histórico"):
-    st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    st.experimental_rerun()
+st.markdown("---")
+st.markdown("Comandos disponíveis:\n- `/web <termo>` para busca na web\n- `/limpar` para apagar o histórico")
+
