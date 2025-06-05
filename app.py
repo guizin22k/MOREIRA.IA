@@ -2,16 +2,17 @@ import streamlit as st
 from system_prompt import SYSTEM_PROMPT
 from duckduckgo_search import DDGS
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 import os
-import time
 
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Cria o cliente da OpenAI com a chave da env
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 st.set_page_config(page_title="MOREIRAGPT 2026", page_icon="🤖", layout="centered")
 
-# CSS customizado para balões e cores
+# CSS customizado para balões de conversa e estilos
 st.markdown(
     """
     <style>
@@ -42,10 +43,6 @@ st.markdown(
         border-radius: 10px;
         background-color: #fff;
     }
-    .loading {
-        font-style: italic;
-        color: gray;
-    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -62,12 +59,12 @@ def search_web(query: str) -> str:
         return "\n\n".join([r["body"] for r in results])
 
 def chat_with_gpt(messages: list) -> str:
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4",
         messages=messages,
         temperature=0.6,
     )
-    return response["choices"][0]["message"]["content"]
+    return response.choices[0].message.content
 
 def render_message(role: str, content: str):
     css_class = "user-message" if role == "user" else "bot-message"
@@ -77,10 +74,8 @@ def render_message(role: str, content: str):
         unsafe_allow_html=True,
     )
 
-# Área do chat com scroll
 chat_container = st.container()
 
-# Entrada do usuário com multiline e botões
 with st.form(key="input_form", clear_on_submit=True):
     user_input = st.text_area(
         "Digite sua mensagem ou comando (use /web para pesquisa na web):",
@@ -118,7 +113,6 @@ with chat_container:
         render_message(msg["role"], msg["content"])
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Botão para limpar histórico no rodapé
 if st.button("🧹 Limpar histórico"):
     st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     st.experimental_rerun()
